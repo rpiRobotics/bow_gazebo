@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<launch>
+
+  <!-- these are the arguments you can pass this launch file, for example paused:=true -->
+  <arg name="paused" default="false"/>
+  <arg name="use_sim_time" default="true"/>
+  <arg name="gui" default="true"/>
+  <arg name="headless" default="false"/>
+  <arg name="debug" default="false"/>
+
+  <!-- Short-term hack to support the original front_laser:=true argument for spawning
+       the simulator. This will be removed in favour of using the config:=x arg instead. -->
+  <arg name="front_laser" default="false" />
+  <arg name="default_config" value="front_laser" if="$(arg front_laser)" />
+  <arg name="default_config" value="base" unless="$(arg front_laser)" />
+  <!-- end of hack -->
+
+  <!-- Configuration of Ridgeback which you would like to simulate.
+       See ridgeback_description for details. -->
+  <arg name="config" default="$(arg default_config)" />
+
+  <!-- These arguments load the electric grippers, for example left_electric_gripper:=true -->
+  <arg name="left_electric_gripper" default="true"/>
+  <arg name="right_electric_gripper" default="true"/>
+
+  <!-- We resume the logic in empty_world.launch, changing the name of the world to be launched -->
+  <include file="$(find gazebo_ros)/launch/empty_world.launch">
+    <!--<arg name="world_name" value="$(find baxter_gazebo)/worlds/baxter.world"/>-->
+    <arg name="debug" value="$(arg debug)" />
+    <arg name="gui" value="$(arg gui)" />
+    <arg name="paused" value="$(arg paused)"/>
+    <arg name="use_sim_time" value="$(arg use_sim_time)"/>
+    <arg name="headless" value="$(arg headless)"/>
+  </include>
+
+  <!-- Load the URDF into the ROS Parameter Server -->
+  <!-- This xacro will pull in baxter_base.urdf.xacro, left_end_effector.urdf.xacro,
+                                           and right_end_effector.urdf.xacro
+       Note: if you set this to false, you MUST have set the robot_description prior
+             to launching baxter_world -->
+  <arg name="load_robot_description" default="true"/>
+  <param if="$(arg load_robot_description)" name="robot_description"
+      command="$(find xacro)/xacro.py --inorder $(find bow_description)/urdf/bow.urdf.xacro gazebo:=true"/>
+  <!--<node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" />-->
+
+  <!-- Load the software version into the ROS Parameter Server -->
+  <param name="rethink/software_version" value="1.2.0" />
+
+  <!-- Publish a static transform between the world and the base of the robot -->
+  <node pkg="tf2_ros" type="static_transform_publisher" name="base_to_world" args="0 0 0 0 0 0 1 world base" />
+
+  <!-- Load Ridgeback's description, controllers, and teleop nodes. -->
+  <!--<include file="$(find ridgeback_description)/launch/description.launch">
+    <arg name="config" value="$(arg config)" />
+  </include>-->
+  <include file="$(find ridgeback_control)/launch/control.launch" />
+  <!--<include file="$(find ridgeback_control)/launch/teleop.launch">
+    <arg name="joystick" value="false"/>
+  </include>-->
+
+  <rosparam param="/gazebo_ros_control/pid_gains">
+    front_left_wheel:
+      p: 1
+      i: 0.1
+      d: 0
+    front_right_wheel:
+      p: 1
+      i: 0.1
+      d: 0
+    rear_left_wheel:
+      p: 1
+      i: 0.1
+      d: 0
+    rear_right_wheel:
+      p: 1
+      i: 0.1
+      d: 0
+  </rosparam>
+
+  <!-- Run a python script to the send a service call to gazebo_ros to spawn a URDF robot -->
+   <node name="urdf_spawner" pkg="gazebo_ros" type="spawn_model" respawn="false" output="screen"
+	args="-param robot_description -urdf -z 0.1 -model bow
+	      -J bow::right_s0 -0.272659
+	      -J bow::right_s1 1.04701
+	      -J bow::right_e0 -0.00123203
+	      -J bow::right_e1 0.49262
+	      -J bow::right_w0 -0.0806423
+	      -J bow::right_w1 -0.0620532
+	      -J bow::right_w2 0.0265941
+	      -J bow::left_s0 0.192483
+	      -J bow::left_s1 1.047
+	      -J bow::left_e0 0.000806359
+	      -J bow::left_e1 0.491094
+	      -J bow::left_w0 -0.178079
+	      -J bow::left_w1 -0.0610333
+	      -J bow::left_w2 -0.0124707" />
+
+  <!-- ros_control baxter launch file -->
+  <include file="$(find baxter_sim_hardware)/launch/baxter_sdk_control.launch">
+      <arg name="right_electric_gripper" value="$(arg right_electric_gripper)"/>
+      <arg name="left_electric_gripper" value="$(arg left_electric_gripper)"/>
+  </include>
+
+</launch>
